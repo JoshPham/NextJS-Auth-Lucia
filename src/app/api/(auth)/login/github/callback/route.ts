@@ -1,9 +1,12 @@
 import { github, lucia } from "@/lib/auth";
 import { cookies } from "next/headers";
-import { OAuth2RequestError } from "arctic";
-import { getUserByGithubId } from "@/db-access/users";
+import { getAccountById, getUserByEmail, getUserByGithubId } from "@/db-access/users";
 import { registerGithubUser } from "@/auth/register";
 import { GitHubUser } from "@/lib/schema/authSchema";
+import { EmailInUseError } from "@/lib/errors";
+import { EmailInUseErrorResponse, InternalServerErrorResponse, OAuth2RequestErrorResponse } from "@/lib/error-responses";
+import { OAuth2RequestError } from "arctic";
+import { setSession } from "@/auth/actions";
 
 export async function GET(request: Request): Promise<Response> {
 	const url = new URL(request.url);
@@ -23,14 +26,25 @@ export async function GET(request: Request): Promise<Response> {
 				Authorization: `Bearer ${tokens.accessToken}`
 			}
 		});
+
 		const githubUser: GitHubUser = await githubUserResponse.json();
+
+		if (githubUser) {
+            const user = await getUserByEmail(githubUser.email)
+			if (user) {
+                const account = await getAccountById(user.id);
+                
+				if (account && account.accountType !== "github") {
+					throw new EmailInUseError();
+				}
+            }
+		}
 
         const existingUser = await getUserByGithubId(githubUser.id);
 
         if (existingUser) {
-			const session = await lucia.createSession(existingUser.id, {});
-			const sessionCookie = lucia.createSessionCookie(session.id);
-			cookies().set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
+			await setSession(existingUser.id);
+
 			return new Response(null, {
 				status: 302,
 				headers: {
@@ -39,13 +53,15 @@ export async function GET(request: Request): Promise<Response> {
 			});
 		}
 
-        await registerGithubUser({
+        const userId = await registerGithubUser({
             githubId: githubUser.id,
             username: githubUser.login,
             email: githubUser.email,
             avatar: githubUser.avatar_url,
         });
 
+		await setSession(userId);
+		
 		return new Response(null, {
 			status: 302,
 			headers: {
@@ -54,16 +70,14 @@ export async function GET(request: Request): Promise<Response> {
 		});
 
 	} catch (e) {
-		// the specific error message depends on the provider
 		if (e instanceof OAuth2RequestError) {
-			// invalid code
-			return new Response(null, {
-				status: 400
-			});
+			return OAuth2RequestErrorResponse;
 		}
-		return new Response(null, {
-			status: 500
-		});
+		if (e instanceof EmailInUseError) {
+			return EmailInUseErrorResponse;
+		}
+
+		return InternalServerErrorResponse;
 	}
 }
 

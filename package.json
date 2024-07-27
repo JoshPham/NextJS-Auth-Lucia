@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@lucia-auth/adapter-drizzle": "^1.0.7",
+    "@radix-ui/react-icons": "^1.3.0",
     "arctic": "^1.9.2",
     "drizzle-kit": "^0.23.0",
     "drizzle-orm": "^0.32.1",
@@ -20,6 +21,7 @@
     "postgres": "^3.4.4",
     "react": "^18",
     "react-dom": "^18",
+    "react-error-boundary": "^4.0.13",
     "zod": "^3.23.8"
   },
   "devDependencies": {

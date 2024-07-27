@@ -1,8 +1,8 @@
 import { DrizzlePostgreSQLAdapter } from "@lucia-auth/adapter-drizzle";
 import { db } from "@/lib/db";
-import { Session, sessions, User, users } from "@/lib/schema/authSchema";
+import { Session, sessions, User, UserInsert, users } from "@/lib/schema/authSchema";
 import { Lucia } from "lucia";
-import { GitHub } from "arctic";
+import { GitHub, Google } from "arctic";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -32,15 +32,16 @@ declare module "lucia" {
 }
 
 export const validateRequest = cache(
-	async (): Promise<{ user: User; session: Session } | { user: null; session: null }> => {
+	async (): Promise<{ user: UserInsert; session: Session } | { user: null; session: null }> => {
+		console.log("cookies", cookies());
 		const sessionId = cookies().get(lucia.sessionCookieName)?.value ?? null;
+		console.log("sessionId", sessionId);
 		if (!sessionId) {
 			return {
 				user: null,
 				session: null
 			};
 		}
-
 		const result = await lucia.validateSession(sessionId);
 		// next.js throws when you attempt to set cookie when rendering page
 		try {
@@ -58,4 +59,15 @@ export const validateRequest = cache(
 );
 
 
-export const github = new GitHub(process.env.GITHUB_CLIENT_ID!, process.env.GITHUB_CLIENT_SECRET!);
+export const github = new GitHub(
+	process.env.GITHUB_CLIENT_ID!,
+	process.env.GITHUB_CLIENT_SECRET!
+);
+
+const appHostName = process.env.NODE_ENV === "production" ? "https://developop.com" : "http://localhost:3000";
+
+export const google = new Google(
+	process.env.GOOGLE_CLIENT_ID!,
+	process.env.GOOGLE_CLIENT_SECRET!,
+	`${appHostName}/api/login/google/callback`
+)
